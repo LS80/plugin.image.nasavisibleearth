@@ -29,6 +29,7 @@ from bs4 import BeautifulSoup
 
 BASE_URL = "http://visibleearth.nasa.gov"
 
+SCHEME_RE = re.compile("view_cat.php\?scheme=([A-Z]+)")
 THUMB_RE = re.compile("view.php\?id=([0-9]+)")
 CAT_RE = re.compile("view_cat.php\?categoryID=([0-9]+)")
 IMG_RE = re.compile("\.(jpg|tiff?|png)$", re.IGNORECASE)
@@ -41,18 +42,32 @@ def get_soup(url):
     # so html5lib will automatically be used instead of HTMLParser.
     return BeautifulSoup(html)
 
-def get_collections():
+
+def get_schemes():
     soup = get_soup(BASE_URL)
 
-    a = soup.find('div', 'main2').find('a', text='Collections')
-    for collection in a.find_next('div', 'sub').find_all('li', 'firstsub'):
-        link = collection.a
-        item = {'label': link.string,
-                'path': plugin.url_for('select_item',
-                                       cat_id=CAT_RE.match(link['href']).group(1),
-                                       page='1')
+    for scheme_link in soup.find('div', id='nav').find_all('a', href=SCHEME_RE):
+        scheme = SCHEME_RE.search(scheme_link['href']).group(1)
+        item = {'label': scheme_link.string,
+                'path': plugin.url_for('browse_by',
+                                       scheme=scheme)
                 }
         yield item
+
+def get_subcategories(scheme):
+    url = urlparse.urljoin(BASE_URL, "view_cat.php?scheme={}".format(scheme))
+    soup = get_soup(url)
+
+    for sub_link in soup.find('div', id='subs').find_all('a'):
+        label = sub_link.string + sub_link.next_sibling
+        m = CAT_RE.match(sub_link['href'])
+        if m:
+            item = {'label': label,
+                    'path': plugin.url_for('select_item',
+                                           cat_id=m.group(1),
+                                           page='1')
+                    }
+            yield item
 
 def get_items(cat_id, page=1):
     page = int(page)
@@ -122,7 +137,11 @@ def get_image_files(img_id):
 
 @plugin.route('/')
 def index():
-    return list(get_collections())
+    return list(get_schemes())
+
+@plugin.route('/scheme/<scheme>')
+def browse_by(scheme):
+    return list(get_subcategories(scheme))
 
 @plugin.route('/img_id/<img_id>')
 def select_image_file(img_id):

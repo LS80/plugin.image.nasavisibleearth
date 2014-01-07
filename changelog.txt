@@ -1,0 +1,5 @@
+0.0.2
+ - Added ability to browse by Topic and Sensor.
+
+0.0.1
+ - First basic version.
